@@ -1,0 +1,13 @@
+data/raw/*
+data/processed/*
+models/*
+*.log
+*.png
+*.csv
+__pycache__/
+*.pyc
+*.pkl
+*.pickle
+.DS_Store
+.env
+.ipynb_checkpoints/
