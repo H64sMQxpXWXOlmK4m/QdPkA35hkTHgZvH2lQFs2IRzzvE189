@@ -61,7 +61,7 @@ def run_predictions(symbols: List[str] = SYMBOLS) -> List[dict]:
     Fetch latest data and run predictions for all symbols.
     Called by the scheduler on each trigger.
     """
-    from src.data.fetcher import refresh_data as _refresh
+    from src.data.fetcher import fetch_all as _refresh
     from src.features.pipeline import build_feature_matrix
     from src.models.ensemble import StackedEnsemble
     import pandas as pd
@@ -81,7 +81,7 @@ def run_predictions(symbols: List[str] = SYMBOLS) -> List[dict]:
     all_data = {}
     for attempt in range(MAX_RETRIES):
         try:
-            all_data = _refresh(symbols, timeframes)
+            all_data = _refresh(symbols, list(timeframes))
             break
         except Exception as e:
             logger.error(f"Data refresh failed (attempt {attempt+1}/{MAX_RETRIES}): {e}")
