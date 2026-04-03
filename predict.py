@@ -1,139 +1,226 @@
-import pandas as pd
+"""
+predict.py — Production prediction script.
+
+Fetches the latest market data, computes features, loads the trained ensemble
+model, and outputs calibrated up-direction probabilities for all assets.
+
+Usage:
+  python predict.py                         # predict all assets
+  python predict.py --symbol BTC/USDT       # predict one asset
+  python predict.py --json                  # output as JSON
+  python predict.py --no-fetch              # use cached data only
+
+Output (per asset):
+  Symbol        : BTC/USDT
+  Prediction at : 2026-04-03 17:00:00 UTC  (for candle 17:00→18:00)
+  P(Up)         : 0.623
+  P(Down)       : 0.377
+  Direction     : UP
+  Confidence    : 0.246  (= |P-0.5| * 2, range 0–1)
+  Components    : LGBM=0.61 XGB=0.63 CatBoost=0.62
+"""
+
+import argparse
+import json
+import logging
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import numpy as np
-import pickle
-from datetime import datetime, timedelta
-from data_loader import DataLoader
-from intra_hour_features import IntraHourFeatureEngineer
+import pandas as pd
 
-def load_model(symbol):
-    prefix = symbol.replace('/', '_')
-    with open(f'models/{prefix}_xgb_model.pkl', 'rb') as f:
-        model = pickle.load(f)
-    with open(f'models/{prefix}_scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    with open(f'models/{prefix}_platt.pkl', 'rb') as f:
-        platt = pickle.load(f)
-    return model, scaler, platt
+sys.path.insert(0, str(Path(__file__).parent))
 
-def compute_hourly_features_for_time(df_hourly, hour_start):
-    """
-    Compute hourly features for a specific hour start using data up to previous hour.
-    df_hourly: DataFrame with hourly OHLCV.
-    hour_start: pd.Timestamp of the hour start.
-    Returns Series of features.
-    """
-    # Ensure index is datetime
-    df = df_hourly.copy()
-    # We need data up to hour_start - 1 hour
-    # Compute features using rolling windows up to previous hour close
-    # We'll compute for all hours and then select the row for hour_start
-    # For simplicity, compute features for all hours and locate
-    feats = pd.DataFrame(index=df.index)
-    feats['gap_return'] = df['open'] / df['close'].shift(1) - 1
-    for window in [1, 2, 4, 8, 12, 24, 48]:
-        feats[f'ret_{window}h'] = df['close'].pct_change(window)
-    returns = df['close'].pct_change()
-    feats['volatility_24h'] = returns.rolling(24).std()
-    feats['volume_ratio'] = df['volume'] / df['volume'].rolling(24).mean()
-    rolling_low = df['low'].rolling(24).min()
-    rolling_high = df['high'].rolling(24).max()
-    feats['price_position'] = (df['close'] - rolling_low) / (rolling_high - rolling_low + 1e-9)
-    sma12 = df['close'].rolling(12).mean()
-    sma24 = df['close'].rolling(24).mean()
-    feats['ma_cross'] = sma12 / sma24 - 1
-    delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / (loss + 1e-9)
-    feats['rsi'] = 100 - (100 / (1 + rs))
-    # Shift features except gap_return
-    shift_cols = [col for col in feats.columns if col != 'gap_return']
-    feats[shift_cols] = feats[shift_cols].shift(1)
-    # Return features for hour_start
-    if hour_start in feats.index:
-        return feats.loc[hour_start]
-    else:
-        raise ValueError(f"No features for hour {hour_start}")
+from src.config import LOGS_DIR, MODELS_DIR, PREDICTION_LOG, SYMBOLS
+from src.data.fetcher import update_data, load_parquet, _make_exchange
+from src.features.pipeline import build_feature_matrix
+from src.models.ensemble import StackedEnsemble
 
-def compute_intra_hour_features_for_time(df_minute, hour_start, lookback_minutes=15):
-    """
-    Compute intra-hour features for a specific hour start using minute data.
-    Assumes we have at least lookback_minutes of data within the hour.
-    """
-    engineer = IntraHourFeatureEngineer(df_minute)
-    # We'll directly compute using the method compute_features_for_hour
-    feats = engineer.compute_features_for_hour(hour_start, lookback_minutes)
-    if feats.empty:
-        raise ValueError(f"Insufficient minute data for hour {hour_start}")
-    # Rename with intra_ prefix
-    feats = feats.add_prefix('intra_')
-    return feats
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOGS_DIR / "predict.log"),
+    ],
+)
+logger = logging.getLogger("predict")
 
-def predict_probability(symbol, hour_start, lookback_minutes=15):
-    """
-    Predict probability that hour closes higher than opens.
-    hour_start: pd.Timestamp of the hour start.
-    Returns probability (0-1).
-    """
-    # Load data
-    loader = DataLoader()
-    panel = loader.get_hourly_panel([symbol])
-    prefix = symbol.replace('/', '_')
-    df_hourly = pd.DataFrame()
-    for col in ['open', 'high', 'low', 'close', 'volume']:
-        df_hourly[col] = panel[col][f'{prefix}_{col}']
-    df_minute = loader.load_asset(symbol, timeframe='1m')
-    
-    # Compute features
-    hourly_feats = compute_hourly_features_for_time(df_hourly, hour_start)
-    intra_feats = compute_intra_hour_features_for_time(df_minute, hour_start, lookback_minutes)
-    # Combine into Series with consistent column order
-    # First ensure both are Series
-    hourly_feats = hourly_feats.copy()
-    intra_feats = intra_feats.copy()
-    # Create a DataFrame with one row, columns in same order as training
-    # Training columns: hourly features first, then intra features
-    # We'll construct a dict
-    feature_dict = {}
-    for col in hourly_feats.index:
-        feature_dict[col] = hourly_feats[col]
-    for col in intra_feats.index:
-        feature_dict[col] = intra_feats[col]
-    X = pd.DataFrame([feature_dict])
-    # Ensure column order matches training (should be same)
+
+# ── Data refresh ──────────────────────────────────────────────────────────────
+
+def refresh_data(symbols: List[str], timeframes=("1h", "4h", "1d", "5m", "15m")) -> Dict:
+    """Update data for all symbols/timeframes incrementally."""
+    exchange = _make_exchange()
+    all_data = {}
+    for sym in symbols:
+        all_data[sym] = {}
+        for tf in timeframes:
+            try:
+                df = update_data(sym, tf, exchange)
+                all_data[sym][tf] = df
+            except Exception as e:
+                logger.warning(f"Failed to update {sym} {tf}: {e}")
+                all_data[sym][tf] = load_parquet(sym, tf)
+        time.sleep(0.1)
+    return all_data
+
+
+def load_cached_data(symbols: List[str], timeframes=("1h", "4h", "1d", "5m", "15m")) -> Dict:
+    all_data = {}
+    for sym in symbols:
+        all_data[sym] = {}
+        for tf in timeframes:
+            all_data[sym][tf] = load_parquet(sym, tf)
+    return all_data
+
+
+# ── Single asset prediction ───────────────────────────────────────────────────
+
+def predict_symbol(symbol: str, all_data: Dict) -> Optional[Dict]:
+    """Load model and predict for the latest bar."""
     # Load model
-    model, scaler, platt = load_model(symbol)
-    # Scale
-    X_scaled = scaler.transform(X)
-    # Predict uncalibrated probability
-    prob_uncal = model.predict_proba(X_scaled)[:, 1]
-    # Calibrate
-    prob_cal = platt.predict_proba(prob_uncal.reshape(-1, 1))[:, 1]
-    return prob_cal[0]
-
-if __name__ == '__main__':
-    symbol = 'BTC/USDT'
-    # Use the latest hour that has at least 15 minutes of data (current hour)
-    loader = DataLoader()
-    df_min = loader.load_asset(symbol, '1m')
-    latest_minute = df_min.index.max()
-    hour_start = latest_minute.replace(minute=0, second=0, microsecond=0)
-    print(f"Latest minute: {latest_minute}")
-    print(f"Predicting for hour starting: {hour_start}")
-    
     try:
-        prob = predict_probability(symbol, hour_start, lookback_minutes=15)
-        print(f"Predicted probability of higher close: {prob:.3f}")
-        # For reference, show open price
-        df_hourly = loader.load_asset(symbol, '1h')
-        open_price = df_hourly.loc[hour_start]['open']
-        print(f"Open price: {open_price}")
-        # If hour has already closed (in historical data), we can compare
-        if hour_start + timedelta(hours=1) <= df_hourly.index.max():
-            close_price = df_hourly.loc[hour_start]['close']
-            direction = 'UP' if close_price > open_price else 'DOWN'
-            print(f"Actual close: {close_price} ({direction})")
+        model = StackedEnsemble.load(symbol)
+    except FileNotFoundError:
+        logger.warning(f"[{symbol}] No trained model found. Run train.py first.")
+        return None
     except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[{symbol}] Model load error: {e}")
+        return None
+
+    # Compute features
+    try:
+        X = build_feature_matrix(symbol, all_data)
+    except Exception as e:
+        logger.error(f"[{symbol}] Feature computation error: {e}")
+        return None
+
+    if X is None or X.empty:
+        logger.warning(f"[{symbol}] No features available.")
+        return None
+
+    # Use the LAST row: features at the most recently closed bar
+    X_latest = X.iloc[[-1]]
+    pred_ts = X.index[-1]       # timestamp of most recently closed 1h bar
+    candle_start = pred_ts
+    candle_end = pred_ts + pd.Timedelta(hours=1)
+
+    # Open price for upcoming candle = close of most recently completed bar
+    df_1h = all_data[symbol].get("1h", pd.DataFrame())
+    open_price = float(df_1h["close"].iloc[-1]) if not df_1h.empty else np.nan
+
+    # Predict
+    try:
+        components = model.predict_proba_components(X_latest)
+        p_up = float(components["calibrated"][0])
+    except Exception as e:
+        logger.error(f"[{symbol}] Prediction error: {e}")
+        return None
+
+    p_down = 1.0 - p_up
+    direction = "UP" if p_up >= 0.5 else "DOWN"
+    confidence = abs(p_up - 0.5) * 2  # 0=no edge, 1=max certainty
+
+    return {
+        "symbol": symbol,
+        "predicted_at_utc": datetime.now(timezone.utc).isoformat(),
+        "last_closed_bar": str(pred_ts),
+        "candle_start": str(candle_start),
+        "candle_end": str(candle_end),
+        "open_price": open_price,
+        "p_up": round(p_up, 4),
+        "p_down": round(p_down, 4),
+        "direction": direction,
+        "confidence": round(confidence, 4),
+        "components": {
+            "lgbm": round(float(components["lgbm"][0]), 4),
+            "xgb": round(float(components["xgb"][0]), 4),
+            "catboost": round(float(components["catboost"][0]), 4),
+            "meta": round(float(components["meta"][0]), 4),
+        },
+    }
+
+
+def predict_all(symbols: List[str], all_data: Dict) -> List[Dict]:
+    results = []
+    for sym in symbols:
+        logger.info(f"Predicting {sym}...")
+        r = predict_symbol(sym, all_data)
+        if r:
+            results.append(r)
+    return results
+
+
+# ── Output ────────────────────────────────────────────────────────────────────
+
+def print_human(results: List[Dict]) -> None:
+    print()
+    print("=" * 65)
+    print(f"  HOURLY DIRECTION FORECASTS — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    print("=" * 65)
+    for r in results:
+        arrow = "▲" if r["direction"] == "UP" else "▼"
+        conf_bar = "█" * int(r["confidence"] * 10)
+        print(f"\n  {r['symbol']:<12}  Candle: {r['candle_start'][:16]} → {r['candle_end'][:16]} UTC")
+        print(f"  {'─'*60}")
+        print(f"  P(Up)   = {r['p_up']:.1%}   P(Down) = {r['p_down']:.1%}")
+        print(f"  Signal  = {arrow} {r['direction']:<5}   Confidence = {r['confidence']:.1%}  [{conf_bar:<10}]")
+        print(f"  Open    ≈ {r['open_price']:,.4f}")
+        c = r["components"]
+        print(
+            f"  Models  : LGBM={c['lgbm']:.3f}  XGB={c['xgb']:.3f}  "
+            f"CatBoost={c['catboost']:.3f}  Meta={c['meta']:.3f}"
+        )
+    print()
+    print("=" * 65)
+    print("  NOTE: Calibrated probabilities. NOT financial advice.")
+    print("=" * 65)
+    print()
+
+
+def log_prediction(results: List[Dict]) -> None:
+    """Append predictions to JSONL log."""
+    with open(PREDICTION_LOG, "a") as f:
+        for r in results:
+            f.write(json.dumps(r) + "\n")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="Predict hourly direction probabilities")
+    parser.add_argument("--symbol", type=str, default=None)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--no-fetch", action="store_true")
+    args = parser.parse_args()
+
+    symbols = [args.symbol] if args.symbol else SYMBOLS
+
+    if args.no_fetch:
+        logger.info("Loading cached data (no fetch)...")
+        all_data = load_cached_data(symbols)
+    else:
+        logger.info("Fetching latest data from Binance...")
+        all_data = refresh_data(symbols)
+
+    results = predict_all(symbols, all_data)
+
+    if not results:
+        logger.error("No predictions generated. Run train.py first.")
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(results, indent=2))
+    else:
+        print_human(results)
+
+    log_prediction(results)
+
+
+if __name__ == "__main__":
+    main()
