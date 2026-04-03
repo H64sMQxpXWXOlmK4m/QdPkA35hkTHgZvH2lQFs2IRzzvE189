@@ -72,4 +72,4 @@ GitHub requires authentication to push. You need:
 4. Extend to other assets (ETH, SOL, XRP, BNB, DOGE)
 
 ## Questions?
-The system is production-ready for probability estimation in prediction markets or trading systems. Edge is modest but probabilities are well-calibrated and non-trivial.
+The system is production-ready for probability estimation in trading systems. Edge is modest but probabilities are well-calibrated and non-trivial.

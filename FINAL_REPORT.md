@@ -112,7 +112,7 @@ python predict_robust.py BTC/USDT
 
 ## Conclusion
 
-We have transformed a simple prototype into a statistically robust, well‑calibrated probability estimation system. The system consistently outperforms random guessing across six different cryptocurrencies, provides interpretable feature importance, and is ready to be integrated into a larger prediction‑market or trading pipeline.
+We have transformed a simple prototype into a statistically robust, well‑calibrated probability estimation system. The system consistently outperforms random guessing across six different cryptocurrencies, provides interpretable feature importance, and is ready to be integrated into a larger trading pipeline.
 
 **Key takeaway**: Early intra‑hour price movements contain strong predictive signal, and a carefully engineered machine‑learning pipeline can extract this signal to produce reliable probability estimates.
 

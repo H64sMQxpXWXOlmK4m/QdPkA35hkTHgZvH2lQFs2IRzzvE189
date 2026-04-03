@@ -156,7 +156,7 @@ python expand_minute_data.py
 2. **Feature engineering per regime** (regime-specific indicators)
 3. **Apply to all 6 assets** to find consistent edge patterns
 4. **Hyperparameter tuning** for stronger edge
-5. **Live trading integration** with prediction market APIs
+5. **Live trading integration** with trading APIs
 
 ## 📚 Reports
 
@@ -175,4 +175,4 @@ MIT License - See LICENSE file for details.
 
 ---
 
-**The system is production-ready for probability estimation in prediction markets or quantitative trading. Edge is modest but probabilities are well-calibrated, non-trivial, and conditioned on market structure.**
+**The system is production-ready for probability estimation in quantitative trading. Edge is modest but probabilities are well-calibrated, non-trivial, and conditioned on market structure.**

@@ -60,4 +60,4 @@ This PR adds a complete quantitative trading system for predicting 1-hour candle
 - Per-regime calibration assessment
 - Comprehensive metrics: Accuracy, ROC AUC, Brier, ECE, probability distribution analysis
 
-This system provides a production-ready foundation for probability estimation in prediction markets or trading systems.
+This system provides a production-ready foundation for probability estimation in trading systems.

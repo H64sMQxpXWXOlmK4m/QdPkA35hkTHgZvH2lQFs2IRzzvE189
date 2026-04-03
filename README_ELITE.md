@@ -134,7 +134,7 @@ Confidence: 0.261
 2. **Implement online learning** to adapt model weights gradually to new market regimes
 3. **Add cross‑asset features** (BTC leader effects on altcoins)
 4. **Develop regime‑switching models** (separate models for sideways vs trending markets)
-5. **Integrate with prediction‑market infrastructure** (Polymarket, etc.)
+5. **Integrate with trading infrastructure**
 6. **Deploy as a live API** with scheduled data updates and real‑time probability streaming
 7. **Implement Monte‑Carlo uncertainty estimation** for probability confidence intervals
 8. **Add economic value metrics** (Kelly‑optimal betting simulations)
@@ -149,6 +149,6 @@ Confidence: 0.261
 
 ## Conclusion
 
-This is no longer a prototype – it is an **elite‑level probability estimation system** that has been rigorously validated, calibrated, and stress‑tested. The system consistently outperforms random guessing across six major cryptocurrencies and provides well‑calibrated, regime‑aware probability estimates that can be trusted for prediction‑market applications.
+This is no longer a prototype – it is an **elite‑level probability estimation system** that has been rigorously validated, calibrated, and stress‑tested. The system consistently outperforms random guessing across six major cryptocurrencies and provides well‑calibrated, regime‑aware probability estimates that can be trusted for trading applications.
 
 **You now have a production‑ready probability engine that captures real market signals and adapts to changing market regimes.**
