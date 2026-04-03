@@ -1,0 +1,36 @@
+================================================================================
+ELITE MODEL REPORT - BTC/USDT
+================================================================================
+
+DATASET
+Features: 63
+Samples: 264
+Target up rate: 0.458
+
+OVERALL METRICS
+accuracy       : 0.5347
+roc_auc        : 0.5592
+brier          : 0.2954
+log_loss       : 0.8545
+up_rate        : 0.4583
+n_samples      : 144
+ece            : 0.2226
+
+CALIBRATION COMPARISON
+Method     | Accuracy | ROC AUC | Brier   | Log Loss | ECE
+--------------------------------------------------------------------------------
+none       | 0.5347 | 0.5592 | 0.2954 | 0.8545 | 0.2226
+platt      | 0.5903 | 0.5592 | 0.2455 | 0.6841 | 0.0700
+isotonic   | 0.6111 | 0.6050 | 0.2365 | 0.6646 | 0.0000
+
+TOP 10 FEATURES BY IMPORTANCE
+mean_reversion_z              : 0.0425
+rsi_vol_regime                : 0.0371
+cci                           : 0.0365
+stoch_k                       : 0.0322
+ma_distance_10                : 0.0288
+gap_return                    : 0.0277
+range_24h                     : 0.0271
+return_4h                     : 0.0271
+prev_hour_minute_vol          : 0.0262
+hour_momentum_interaction     : 0.0239

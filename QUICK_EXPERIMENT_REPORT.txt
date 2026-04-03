@@ -1,0 +1,38 @@
+================================================================================
+QUICK EXPERIMENT RESULTS - LAST 30 DAYS
+================================================================================
+Generated: 2026-04-02 23:27:28.962338
+
+Asset     | Accuracy | ROC AUC | Brier   | ECE    | Samples
+--------------------------------------------------------------------------------
+BTC/USDT  | 0.5300 | 0.5449 | 0.2415 | 0.0000 | 217
+ETH/USDT  | 0.5207 | 0.5274 | 0.2450 | 0.0000 | 217
+SOL/USDT  | 0.5945 | 0.5556 | 0.2384 | 0.0000 | 217
+XRP/USDT  | 0.5668 | 0.5354 | 0.2435 | 0.0000 | 217
+BNB/USDT  | 0.5622 | 0.5741 | 0.2431 | 0.0000 | 217
+DOGE/USDT | 0.5392 | 0.5338 | 0.2452 | 0.0000 | 217
+
+SUMMARY STATISTICS
+Average Accuracy: 0.5522 ± 0.0250
+Average ROC AUC: 0.5452 ± 0.0157
+Average Brier: 0.2428 ± 0.0023
+Average ECE: 0.0000 ± 0.0000
+
+EDGE ASSESSMENT
+Average Brier improvement over random: +2.9%
+Verdict: POSITIVE EDGE DETECTED
+
+TOP FEATURES (consensus across assets)
+--------------------------------------------------------------------------------
+bb_position                        : 0.0955
+session_asia                       : 0.0848
+resistance_distance                : 0.0755
+ma_distance_10                     : 0.0738
+volume_price_interaction           : 0.0714
+atr                                : 0.0691
+momentum_regime                    : 0.0663
+rsi_vol_regime                     : 0.0571
+momentum_vol_interaction           : 0.0520
+stoch_k                            : 0.0486
+
+================================================================================
