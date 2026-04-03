@@ -1,0 +1,50 @@
+================================================================================
+STATE-CONDITIONAL MODEL REPORT - TEST SET ONLY
+================================================================================
+Generated: 2026-04-03 00:02:47.203971
+Symbol: BTC/USDT
+Test predictions: 840
+
+1. PROBABILITY DISTRIBUTION (TEST SET)
+--------------------------------------------------------------------------------
+[0.0, 0.1):   0.0%
+[0.1, 0.2):   1.8%
+[0.2, 0.3):   8.1%
+[0.3, 0.4):  16.1%
+[0.4, 0.5):  25.5%
+[0.5, 0.6):  27.0%
+[0.6, 0.7):  16.0%
+[0.7, 0.8):   5.4%
+[0.8, 0.9):   0.2%
+[0.9, 1.0):   0.0%
+
+Concentration in [0.45, 0.55]: 27.0%
+Required: <60% (PASS)
+
+2. OVERALL TEST PERFORMANCE
+--------------------------------------------------------------------------------
+Accuracy: 0.4636
+Brier score: 0.2696
+Base rate: 0.5024
+Probability std: 0.1352
+
+3. CALIBRATION CHECK
+--------------------------------------------------------------------------------
+Mean predicted probability: 0.488
+Actual up rate: 0.502
+Deviation: 0.014
+
+4. EDGE ASSESSMENT
+--------------------------------------------------------------------------------
+Brier improvement over random: -7.9%
+
+5. FINAL VERDICT
+--------------------------------------------------------------------------------
+1. Probability dispersion: 27.0% in middle (need <60%): ✅ PASS
+2. Overall edge: accuracy=0.464 (need >0.5): ❌ FAIL
+3. Non-trivial probabilities: std=0.135 (need >0.1): ✅ PASS
+
+❌ SYSTEM FAILURE: Does not meet all requirements
+   Model lacks predictive edge on test set.
+
+================================================================================
